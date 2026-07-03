@@ -51,7 +51,7 @@ class SpaceShooter:
             if bullet.y < 0:
                 self.bullets.remove(bullet)
         self.spawn_timer += 1
-        if self.spawn_timer > 30:
+        if self.spawn_timer > 30: 
             self.spawn_enemy()
             self.spawn_timer = 0
         for enemy in self.enemies[:]:
@@ -64,7 +64,7 @@ class SpaceShooter:
                     self.enemies.remove(enemy)
                     self.score += 5 
                 else:
-                    print(f"¡Spaceship destroyed! Final score: {self.score}")
+                    print(f"\n¡Spaceship destroyed! Final score: {self.score}\n")
                     self.is_running = False
             for bullet in self.bullets[:]:
                 if enemy.colliderect(bullet):

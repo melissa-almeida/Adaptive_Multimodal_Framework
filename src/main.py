@@ -1,72 +1,89 @@
 import pygame
 import sys
 import cv2
+import os
 from game.space_shooter import SpaceShooter
 from input_modules.vision_pose import PoseTracker
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def main():
+    pygame.init()
     game = SpaceShooter()
     pose_tracker = PoseTracker()
-    print("Start...")
 
-    while game.is_running:
-        success, camera_frame = pose_tracker.update()
-        tilt = pose_tracker.current_tilt
-        confidence = pose_tracker.confidence_score
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("Error: No webcam detected")
+        return
+    clock = pygame.time.Clock()
+    running = True
+
+    while running and game.is_running:
+        ret, frame = cap.read()
+        if not ret:
+            print("Error to capture frame")
+            break
+        
+        action, confidence = pose_tracker.process_frame(frame)       
         control_actions = {
             'move_x': 0,
+            "LEFT": False,
+            "RIGHT": False,
+            "FIRE": False,
+            "SHIELD": False,
             'fire': False,
             'shield': False
         }
-        direction_text = ""
-        if confidence > 0.4:
-            if tilt < -0.3:
+        if confidence > 0.6:
+            if action == "LEFT":
                 control_actions['move_x'] = -1  
-                direction_text = "LEFT"
-            elif tilt > 0.3:
+                control_actions['LEFT'] = True
+            elif action == "RIGHT":
                 control_actions['move_x'] = 1   
-                direction_text = "RIGHT"
+                control_actions['RIGHT'] = True
         else:
-            direction_text = "LOW CONFIDENCE"
-            # Aquí es donde el profesor verá la magia en el futuro: 
+            # En el futuro, este bloque decidirá si le cede el 100% del control al módulo de Audio. 
             # "Baja confianza -> activar filtros preventivos o modo seguro"
-            pass
+            control_actions['move_x'] = 0
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                game.is_running = False
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
+                    running = False
 
-        # manual keyboard controls for testing (just in case)
+        # manual keyboard controls for testing (temporal)
         keys = pygame.key.get_pressed()
         if keys[pygame.K_SPACE]:
             control_actions['fire'] = True
+            control_actions['FIRE'] = True
         if keys[pygame.K_s]:
             control_actions['shield'] = True
+            control_actions['SHIELD'] = True
         if keys[pygame.K_LEFT]:
             control_actions['move_x'] = -1
+            control_actions['LEFT'] = True
         if keys[pygame.K_RIGHT]:
             control_actions['move_x'] = 1
+            control_actions['RIGHT'] = True
 
         game.update(control_actions)
         game.render()
 
-        if success and camera_frame is not None:
-            status_color = (0, 255, 0) if confidence > 0.4 else (0, 0, 255)
-            cv2.putText(camera_frame, f"Cam Confidence: {confidence:.2f}", (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
-            if direction_text == "LOW CONFIDENCE":  #red
-                cv2.putText(camera_frame, direction_text, (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
-            elif direction_text in ["MOVE: LEFT", "MOVE: RIGHT"]: #yellow/cyan
-                cv2.putText(camera_frame, direction_text, (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 0), 2)
-            else: #gray 
-                cv2.putText(camera_frame, direction_text, (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (150, 150, 150), 1)
-            cv2.imshow("Debug Camera View", camera_frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-        game.clock.tick(60)
+        if not game.is_running:
+            break
 
+        cv2.imshow("Debug Camera View", frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            running = False
+
+        clock.tick(60)
+
+    cap.release()
     pose_tracker.close()
     cv2.destroyAllWindows()
-    game.close()
+    pygame.quit()
     sys.exit()
 
 if __name__ == "__main__":
