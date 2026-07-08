@@ -8,22 +8,28 @@ from input_modules.audio_voice import AudioModule
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def main():
     pygame.init()
-    game = SpaceShooter()
-    pose_tracker = PoseTracker()
-    audio_mod = AudioModule()
-    audio_mod.calibrate()
     cap = cv2.VideoCapture(0)
-
     if not cap.isOpened():
         print("Error: No webcam detected")
         return
+    pose_tracker = PoseTracker()
+    ret, frame = cap.read()
+    if ret:
+        try:
+            pose_tracker.process_frame(frame) 
+        except AttributeError:
+            pass
+    audio_mod = AudioModule()
+    audio_mod.calibrate()
+    game = SpaceShooter()
+    audio_mod.start()
+
     clock = pygame.time.Clock()
     running = True
-
-    audio_mod.start()
 
     while running and game.is_running:
         ret, frame = cap.read()
@@ -107,7 +113,7 @@ def main():
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, cmd_color, 2)
 
         cv2.putText(frame, f"Confidence Microphone: {audio_confidence :.2f}%", (w - 260, 75), #audio_confidence * 100
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, cmd_color, 2)  #(0 , 250, 0)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0 , 250, 0), 2)  #(0 , 250, 0)
 
         cv2.imshow("Debug Camera View", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
