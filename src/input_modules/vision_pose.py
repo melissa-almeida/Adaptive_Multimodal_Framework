@@ -69,7 +69,7 @@ class PoseTracker:
             text_left = f"MOVE: {action}"            
         cv2.putText(frame, text_left, (15, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color_bgr, 2, cv2.LINE_AA)
 
-        text_right = f"Confidence: {self.confidence_score:.2f}"
+        text_right = f"Confidence Camera: {self.confidence_score:.2f}"
         cv2.putText(frame, text_right, (w - 240, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color_bgr, 2, cv2.LINE_AA)
         
         return action, self.confidence_score
