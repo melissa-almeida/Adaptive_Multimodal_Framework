@@ -88,3 +88,4 @@ class AdaptationEngine:
                 control_actions['shield'] = True
                 meta['cross_modal_trigger'] = True
         return control_actions, meta
+    

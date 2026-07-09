@@ -6,7 +6,7 @@ from game.space_shooter import SpaceShooter
 from input_modules.vision_pose import PoseTracker
 from input_modules.audio_voice import AudioModule
 from adaptation.adaptation_engine import AdaptationEngine
-
+pygame.time.get_ticks()
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -31,6 +31,8 @@ def main():
     audio_mod.start()
     clock = pygame.time.Clock()
     running = True
+    display_cmd = "NONE"
+    cmd_display_until = 0
 
     while running and game.is_running:
         ret, frame = cap.read()
@@ -90,17 +92,24 @@ def main():
         if not game.is_running:
             break
         h, w, _ = frame.shape
+        
+        current_ticks = pygame.time.get_ticks()
+        if audio_cmd != "NONE":
+            display_cmd = audio_cmd
+            cmd_display_until = current_ticks + 2000  
+        elif current_ticks > cmd_display_until:
+            display_cmd = audio_cmd
 
-        if "FIRE" in audio_cmd or "SHIELD" in audio_cmd:
+        if "FIRE" in display_cmd or "SHIELD" in display_cmd:
             cmd_color = (0, 255, 0)       
-        elif "NONE" in audio_cmd:
+        elif "NONE" in display_cmd:
             cmd_color = (0, 0, 255)   
         else: # UNKNOWN / NOISE
             cmd_color = (0, 255, 255)
 
-        cv2.putText(frame, f"{audio_cmd}", (10, 75), 
+        cv2.putText(frame, f"{display_cmd}", (10, 75), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, cmd_color, 2)
-        
+    
         if audio_confidence < 0.40:
             ac_color = (0, 0, 255)
         else:
