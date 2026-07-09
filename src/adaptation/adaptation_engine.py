@@ -1,16 +1,21 @@
 import numpy as np
 from collections import deque
+import pygame
 
 # It merges asynchronous multimodal variables based on the statistical reliability of the input signals (Camera and Microphone)
 class AdaptationEngine:
-    def __init__(self, window_size=10):
+    def __init__(self, window_size=15):
         self.vision_history = deque(maxlen=window_size)
         self.audio_history = deque(maxlen=window_size)
-        self.THRESH_HIGH_VISION = 0.70   
-        self.THRESH_LOW_VISION = 0.40    
+        self.DROP_TO_ASSISTED = 0.70
+        self.DROP_TO_SAFE = 0.35
+        self.RECOVER_TO_ASSISTED = 0.50
+        self.RECOVER_TO_FULL = 0.80   
         self.current_mode = "FULL_MULTIMODAL"
         self.smoothed_move_x = 0.0
         self.alpha_smoothing = 0.25      
+        self.last_state_change_time = 0
+        self.MIN_ASSISTED_DURATION = 1500
 
     def adapt(self, control_actions, vision_action, vision_confidence, audio_vol_norm, audio_confidence, audio_cmd):
         self.vision_history.append(vision_confidence)
@@ -25,13 +30,23 @@ class AdaptationEngine:
             'consume_command': False,
             'cross_modal_trigger': False
         }
-        # State Machine Transition based on Sustained Trust (Hysteresis)
-        if avg_vision_conf >= self.THRESH_HIGH_VISION:
-            self.current_mode = "FULL_MULTIMODAL"
-        elif self.THRESH_LOW_VISION <= avg_vision_conf < self.THRESH_HIGH_VISION:
-            self.current_mode = "ASSISTED_SMOOTHING"
-        else:
-            self.current_mode = "SAFE_FALLBACK"
+        current_time = pygame.time.get_ticks()
+        if self.current_mode == "FULL_MULTIMODAL":
+            if avg_vision_conf < self.DROP_TO_ASSISTED:
+                self.current_mode = "ASSISTED_SMOOTHING"
+                self.last_state_change_time = current_time
+        elif self.current_mode == "ASSISTED_SMOOTHING":
+            if avg_vision_conf >= self.RECOVER_TO_FULL:
+                self.current_mode = "FULL_MULTIMODAL"
+                self.last_state_change_time = current_time
+            elif avg_vision_conf < self.DROP_TO_SAFE:
+                if (current_time - self.last_state_change_time) >= self.MIN_ASSISTED_DURATION:
+                    self.current_mode = "SAFE_FALLBACK"
+                    self.last_state_change_time = current_time
+        elif self.current_mode == "SAFE_FALLBACK":
+            if avg_vision_conf >= self.RECOVER_TO_ASSISTED:
+                self.current_mode = "ASSISTED_SMOOTHING"
+                self.last_state_change_time = current_time
         
         meta['mode'] = self.current_mode
         target_move_x = 0.0
@@ -44,7 +59,7 @@ class AdaptationEngine:
             if control_actions['move_x'] != 0:
                 target_move_x = control_actions['move_x']
             self.smoothed_move_x = target_move_x
-        
+
         elif self.current_mode == "ASSISTED_SMOOTHING":     # Unstable tracking
             if vision_action == "LEFT":
                 target_move_x = -0.65  

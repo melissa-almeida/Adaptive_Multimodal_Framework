@@ -8,7 +8,6 @@ from input_modules.audio_voice import AudioModule
 from adaptation.adaptation_engine import AdaptationEngine
 pygame.time.get_ticks()
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 def main():
@@ -92,8 +91,8 @@ def main():
         if not game.is_running:
             break
         h, w, _ = frame.shape
-        
         current_ticks = pygame.time.get_ticks()
+        
         if audio_cmd != "NONE":
             display_cmd = audio_cmd
             cmd_display_until = current_ticks + 2000  
@@ -110,13 +109,13 @@ def main():
         cv2.putText(frame, f"{display_cmd}", (10, 75), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, cmd_color, 2)
     
-        if audio_confidence < 0.40:
+        if audio_confidence < 0.40:  
             ac_color = (0, 0, 255)
         else:
             ac_color = (0, 250, 0)
 
-        cv2.putText(frame, f"Confidence Microphone: {audio_confidence :.2f}%", (w - 260, 75), #audio_confidence * 100
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, ac_color, 2)  #(0 , 250, 0)
+        cv2.putText(frame, f"Confidence Microphone: {audio_confidence :.2f}%", (w - 260, 75), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, ac_color, 2)  
 
         current_mode = adaptation_meta['mode']
         if current_mode == "FULL_MULTIMODAL":
