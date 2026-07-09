@@ -5,10 +5,11 @@ import os
 from game.space_shooter import SpaceShooter
 from input_modules.vision_pose import PoseTracker
 from input_modules.audio_voice import AudioModule
+from adaptation.adaptation_engine import AdaptationEngine
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def main():
     pygame.init()
@@ -26,8 +27,8 @@ def main():
     audio_mod = AudioModule()
     audio_mod.calibrate()
     game = SpaceShooter()
+    adaptation_engine = AdaptationEngine()
     audio_mod.start()
-
     clock = pygame.time.Clock()
     running = True
 
@@ -39,6 +40,7 @@ def main():
         
         action, vision_confidence = pose_tracker.process_frame(frame)       
         _, audio_vol_norm, audio_confidence, audio_cmd = audio_mod.get_audio_data()
+        
         control_actions = {
             'move_x': 0,
             "LEFT": False,
@@ -48,38 +50,6 @@ def main():
             'fire': False,
             'shield': False
         }
-        if vision_confidence > 0.6:
-            if action == "LEFT":
-                control_actions['move_x'] = -1  
-                control_actions['LEFT'] = True
-            elif action == "RIGHT":
-                control_actions['move_x'] = 1   
-                control_actions['RIGHT'] = True
-        else:
-            # En el futuro, este bloque decidirá si le cede el 100% del control al módulo de Audio. 
-            # "Baja confianza -> activar filtros preventivos o modo seguro"
-            # se conectará al adaptation_engine.py
-            control_actions['move_x'] = 0
-
-        if "FIRE" in audio_cmd:
-            control_actions['FIRE'] = True
-            control_actions['fire'] = True
-            with audio_mod.lock:
-                audio_mod.current_command = "NONE"
-        elif "SHIELD" in audio_cmd:
-            control_actions['SHIELD'] = True
-            control_actions['shield'] = True
-            with audio_mod.lock:
-                audio_mod.current_command = "NONE"
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
-                    running = False
-
-        # manual keyboard controls for testing (temporal)
         keys = pygame.key.get_pressed()
         if keys[pygame.K_SPACE]:
             control_actions['fire'] = True
@@ -94,7 +64,27 @@ def main():
             control_actions['move_x'] = 1
             control_actions['RIGHT'] = True
 
-        game.update(control_actions)
+        adapted_actions, adaptation_meta = adaptation_engine.adapt(
+            control_actions=control_actions,
+            vision_action=action,
+            vision_confidence=vision_confidence,
+            audio_vol_norm=audio_vol_norm,
+            audio_confidence=audio_confidence,
+            audio_cmd=audio_cmd
+        )
+
+        if adaptation_meta['consume_command']:
+            with audio_mod.lock:
+                audio_mod.current_command = "NONE"
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
+                    running = False
+       
+        game.update(adapted_actions)
         game.render()
 
         if not game.is_running:
@@ -108,13 +98,32 @@ def main():
         else: # UNKNOWN / NOISE
             cmd_color = (0, 255, 255)
 
-        #cv2.putText(frame, f"Command: {audio_cmd}", (10, 75), 
         cv2.putText(frame, f"{audio_cmd}", (10, 75), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, cmd_color, 2)
+        
+        if audio_confidence < 0.40:
+            ac_color = (0, 0, 255)
+        else:
+            ac_color = (0, 250, 0)
 
         cv2.putText(frame, f"Confidence Microphone: {audio_confidence :.2f}%", (w - 260, 75), #audio_confidence * 100
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0 , 250, 0), 2)  #(0 , 250, 0)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, ac_color, 2)  #(0 , 250, 0)
 
+        current_mode = adaptation_meta['mode']
+        if current_mode == "FULL_MULTIMODAL":
+            mode_color_bgr = (0, 255, 0)     
+        elif current_mode == "ASSISTED_SMOOTHING":
+            mode_color_bgr = (0, 255, 255)   
+        else: #SAFE_FALLBACK
+            mode_color_bgr = (0, 0, 255)     
+
+        cv2.putText(frame, f"MODE: {current_mode}", (15, 110), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, mode_color_bgr, 2, cv2.LINE_AA)
+        
+        if adaptation_meta['cross_modal_trigger']:
+            cv2.putText(frame, "EMERGENCY SHIELD ACTIVE!", (15, 140), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2, cv2.LINE_AA)
+        
         cv2.imshow("Debug Camera View", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             running = False
