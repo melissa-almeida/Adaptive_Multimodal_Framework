@@ -20,7 +20,7 @@ def main():
     ret, frame = cap.read()
     if ret:
         try:
-            pose_tracker.process_frame(frame) 
+            pose_tracker.process_frame(frame)
         except AttributeError:
             pass
     audio_mod = AudioModule()
@@ -33,15 +33,18 @@ def main():
     display_cmd = "NONE"
     cmd_display_until = 0
 
-    while running and game.is_running:
+    # running now controls the WHOLE program (camera + audio + window).
+    # It only becomes False when the user explicitly quits
+    # (Q / ESC / closing the pygame window / pressing 'q' on the camera view).
+    while running:
         ret, frame = cap.read()
         if not ret:
             print("Error to capture frame")
             break
-        
-        action, vision_confidence = pose_tracker.process_frame(frame)       
+
+        action, vision_confidence = pose_tracker.process_frame(frame)
         _, audio_vol_norm, audio_confidence, audio_cmd = audio_mod.get_audio_data()
-        
+
         control_actions = {
             'move_x': 0,
             "LEFT": False,
@@ -78,60 +81,71 @@ def main():
             with audio_mod.lock:
                 audio_mod.current_command = "NONE"
 
+        # --- Restart handling (keyboard R or clicking the Play Again button) ---
+        if game.game_over and keys[pygame.K_r]:
+            game.restart()
+            adaptation_engine = AdaptationEngine()  # fresh adaptation state for the new run
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
                     running = False
-       
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1 and game.is_play_again_clicked(event.pos):
+                    game.restart()
+                    adaptation_engine = AdaptationEngine()
+
         game.update(adapted_actions)
         game.render()
 
-        if not game.is_running:
-            break
         h, w, _ = frame.shape
         current_ticks = pygame.time.get_ticks()
-        
+
         if audio_cmd != "NONE":
             display_cmd = audio_cmd
-            cmd_display_until = current_ticks + 2000  
+            cmd_display_until = current_ticks + 2000
         elif current_ticks > cmd_display_until:
             display_cmd = audio_cmd
 
         if "FIRE" in display_cmd or "SHIELD" in display_cmd:
-            cmd_color = (0, 255, 0)       
+            cmd_color = (0, 255, 0)
         elif "NONE" in display_cmd:
-            cmd_color = (0, 0, 255)   
-        else: # UNKNOWN / NOISE
+            cmd_color = (0, 0, 255)
+        else:  # UNKNOWN / NOISE
             cmd_color = (0, 255, 255)
 
-        cv2.putText(frame, f"{display_cmd}", (10, 75), 
+        cv2.putText(frame, f"{display_cmd}", (10, 75),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, cmd_color, 2)
-    
-        if audio_confidence < 0.40:  
+
+        if audio_confidence < 0.40:
             ac_color = (0, 0, 255)
         else:
             ac_color = (0, 250, 0)
 
-        cv2.putText(frame, f"Confidence Microphone: {audio_confidence :.2f}%", (w - 260, 75), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, ac_color, 2)  
+        cv2.putText(frame, f"Confidence Microphone: {audio_confidence :.2f}%", (w - 260, 75),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, ac_color, 2)
 
         current_mode = adaptation_meta['mode']
         if current_mode == "FULL_MULTIMODAL":
-            mode_color_bgr = (0, 255, 0)     
+            mode_color_bgr = (0, 255, 0)
         elif current_mode == "ASSISTED_SMOOTHING":
-            mode_color_bgr = (0, 255, 255)   
-        else: #SAFE_FALLBACK
-            mode_color_bgr = (0, 0, 255)     
+            mode_color_bgr = (0, 255, 255)
+        else:  # SAFE_FALLBACK
+            mode_color_bgr = (0, 0, 255)
 
-        cv2.putText(frame, f"MODE: {current_mode}", (15, 110), 
+        cv2.putText(frame, f"MODE: {current_mode}", (15, 110),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, mode_color_bgr, 2, cv2.LINE_AA)
-        
+
         if adaptation_meta['cross_modal_trigger']:
-            cv2.putText(frame, "EMERGENCY SHIELD ACTIVE!", (15, 140), 
+            cv2.putText(frame, "EMERGENCY SHIELD ACTIVE!", (15, 140),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2, cv2.LINE_AA)
-        
+
+        if game.game_over:
+            cv2.putText(frame, "GAME OVER - Press R or click Play Again", (15, 170),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 60, 255), 2, cv2.LINE_AA)
+
         cv2.imshow("Debug Camera View", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             running = False
@@ -142,6 +156,7 @@ def main():
     pose_tracker.close()
     audio_mod.stop()
     cv2.destroyAllWindows()
+    game.close()
     pygame.quit()
     sys.exit()
 
