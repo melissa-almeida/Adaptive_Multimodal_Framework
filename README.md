@@ -29,7 +29,7 @@ Tracks the horizontal shoulder line vector to extract user lateral tilt. Movemen
 Processes acoustic data through a multi-stage pipeline:
 * **Silero VAD Callback:** Evaluates sample chunks (512 samples @ 16kHz) to derive speech probability $P(\text{speech}|\text{audio})$ acting as the continuous confidence metric.
 * **Temporal Windowing:** Mitigates phonetic clipping by preserving speech onset and offset margins.
-* **Asynchronous ASR:** Spawns worker threads to handle Google Speech Recognition tasks for specific actions (`"FIRE"`, `"SHIELD"`), avoiding main game-loop degradation.
+* **Asynchronous ASR:** Spawns worker threads to handle Google Speech Recognition tasks for specific actions (`"FIRE or SHOOT"`, `"SHIELD or BARRIER"`), avoiding main game-loop degradation.
 
 ### 3. Adaptation Engine (`src/adaptation_engine.py`)
 Evaluates tracking and speech confidence metrics frame-by-frame to switch between three discrete operation modes:
@@ -76,6 +76,9 @@ To start the interface, launch the primary execution script from the repository 
 ```Bash
 python main.py
 ```
+
+---
+
 ## Execution Flow
 1. Audio Calibration: On startup, the audio module runs an initial ambient noise profiling routine to compute background acoustic thresholds.
 2. Webcam Initialization: MediaPipe frames compile and launch immediately after calibration.
