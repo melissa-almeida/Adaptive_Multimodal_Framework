@@ -69,6 +69,8 @@ pip install -r requirements.txt
 ```
 (Alternatively, if managing via Anaconda Prompt, run conda create -n multimodal-env python=3.10 followed by pip install -r requirements.txt inside the active environment).
 
+---
+
 ## Running the System
 To start the interface, launch the primary execution script from the repository root:
 ```Bash
